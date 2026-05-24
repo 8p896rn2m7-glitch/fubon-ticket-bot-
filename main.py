@@ -35,7 +35,7 @@ targets = [
 
 
 state = {
-    t["url"]: {"found": set(), "fail": 0, "cooldown": 0}
+    t["url"]: set()
     for t in targets
 }
 
@@ -53,15 +53,28 @@ def send(msg):
 
 def fetch(url):
     headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        return r.text
+    except:
+        return ""
 
-    for _ in range(2):  # 🔥 retry
-        try:
-            r = requests.get(url, headers=headers, timeout=10)
-            return r.text
-        except:
-            time.sleep(1)
 
-    return ""
+def is_real_available(text, zone):
+    """
+    真正防誤報判斷
+    """
+
+    if zone not in text:
+        return False
+
+    bad = ["售完", "已售完", "無票", "不可選", "disabled", "sold out"]
+
+    for b in bad:
+        if b in text:
+            return False
+
+    return True
 
 
 while True:
@@ -70,43 +83,30 @@ while True:
         name = t["name"]
         zones = t["zones"]
 
-        try:
-            text = fetch(url)
+        text = fetch(url)
+        if not text:
+            continue
 
-            if not text:
-                continue
+        found = {z for z in zones if is_real_available(text, z)}
 
-            found = {z for z in zones if z in text}
-            prev = state[url]["found"]
+        prev = state[url]
+        added = found - prev
 
-            added = found - prev
+        if added:
+            msg = f"""🎫 釋票通知｜{name}
 
-            # 🔥 冷卻機制（避免重複洗訊息）
-            if state[url]["cooldown"] > 0:
-                state[url]["cooldown"] -= 1
-                continue
+🟢 可購買區：
+"""
 
-            if added:
-                msg = f"🎫 釋票通知｜{name}\n\n"
-                msg += "🔥 新釋出區域：\n"
-                msg += "\n".join(sorted(added))
-                msg += f"\n\n🔗 {url}"
+            for z in sorted(added):
+                msg += f"🟢 {z}\n"
 
-                send(msg)
+            msg += f"\n🔗 {url}"
 
-                print(name, ":", added)
+            send(msg)
 
-                # 🔥 設定冷卻（避免連續重複通知）
-                state[url]["cooldown"] = 3
+            print(name, "NEW:", added)
 
-            state[url]["found"] = found
-            state[url]["fail"] = 0
-
-        except Exception as e:
-            state[url]["fail"] += 1
-            print(name, "error:", e)
-
-            if state[url]["fail"] == 5:
-                send(f"⚠️ {name} 監控異常")
+        state[url] = found
 
     time.sleep(CHECK_INTERVAL)
