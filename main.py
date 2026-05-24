@@ -1,45 +1,72 @@
 import requests
 import time
+import hashlib
 
 BOT_TOKEN = "8910259457:AAHpwewaaZUEwxw8uGF8E0A2VKaev2UPxu0"
 CHAT_ID = "8699744629"
 
 URL = "https://guardians.fami.life/UTK0204_"
 
-sent = False
+CHECK_INTERVAL = 10  # 秒（建議 10~15）
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+last_hash = None
+fail_count = 0
+
+
+def send_telegram(msg):
+    try:
+        requests.post(
+            TELEGRAM_API,
+            data={
+                "chat_id": CHAT_ID,
+                "text": msg
+            },
+            timeout=10
+        )
+    except:
+        pass
+
 
 while True:
     try:
-        r = requests.get(URL)
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        r = requests.get(URL, headers=headers, timeout=10)
         text = r.text
 
-        keywords = [
-            "內野",
-            "B1",
-            "A1"
-        ]
+        current_hash = hashlib.md5(text.encode()).hexdigest()
 
-        found = any(k in text for k in keywords)
+        # 第一次初始化
+        if last_hash is None:
+            last_hash = current_hash
+            print("初始化完成，開始監控...")
+            time.sleep(CHECK_INTERVAL)
+            continue
 
-        if found and not sent:
-            message = f"""
-🎫 富邦悍將可能有釋票！
+        # 有變化 => 可能釋票
+        if current_hash != last_hash:
+            print("偵測到更新！")
 
-立即查看：
-{URL}
-"""
+            send_telegram(f"""🎫 富邦悍將疑似釋票！
 
-            api = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+🔗 {URL}
+🕒 系統偵測頁面更新
+""")
 
-            requests.post(api, data={
-                "chat_id": CHAT_ID,
-                "text": message
-            })
+            last_hash = current_hash
 
-            sent = True
-
-        time.sleep(30)
+        fail_count = 0  # 成功就歸零
 
     except Exception as e:
-        print(e)
-        time.sleep(30)
+        fail_count += 1
+        print(f"錯誤 ({fail_count}):", e)
+
+        # 避免一直炸
+        if fail_count >= 5:
+            send_telegram("⚠️ 監控系統異常（連線失敗過多）")
+            fail_count = 0
+
+    time.sleep(CHECK_INTERVAL)
