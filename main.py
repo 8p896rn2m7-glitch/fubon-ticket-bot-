@@ -7,21 +7,44 @@ CHAT_ID = "8699744629"
 
 URL = "https://guardians.fami.life/UTK0204_"
 
-CHECK_INTERVAL = 10
+CHECK_INTERVAL = 8  # 🔥 更接近秒級
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
+# 🎯 熱門區優先排序（越前面越重要）
+priority_zones = [
+    # B1 熱門
+    "B1_108", "B1_109", "B1_110",
+    "B1_112", "B1_113", "B1_114",
+    "B1_116", "B1_117", "B1_118",
+
+    # 次熱門
+    "B1_111", "B1_115",
+
+    # 一般 B1
+    "B1_102", "B1_103", "B1_106", "B1_120", "B1_123", "B1_124",
+
+    # L2
+    "L2-211", "L2_212", "L2-214", "L2_215",
+
+    # L4
+    "L4_401", "L4-402", "L4_403", "L4-404", "L4_405", "L4_406",
+    "L4_407", "L4_408", "L4_410", "L4_411", "L4_412", "L4_413",
+    "L4_414", "L4_415", "L4_416", "L4_417",
+
+    # L5
+    "L5_503", "L5_504", "L5_505", "L5_506", "L5_507", "L5_508",
+    "L5_509", "L5_510", "L5_511", "L5_512", "L5_513", "L5_514", "L5_515"
+]
+
 last_hash = None
-last_found = False
+last_found = set()
 
 
-def send_telegram(msg):
+def send(msg):
     try:
         requests.post(
             TELEGRAM_API,
-            data={
-                "chat_id": CHAT_ID,
-                "text": msg
-            },
+            data={"chat_id": CHAT_ID, "text": msg},
             timeout=10
         )
     except:
@@ -30,41 +53,39 @@ def send_telegram(msg):
 
 while True:
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
-        r = requests.get(URL, headers=headers, timeout=10)
+        r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         text = r.text
-
-        # 只看「內野」
-        found_infield = "內野" in text
 
         current_hash = hashlib.md5(text.encode()).hexdigest()
 
-        # 初始化
+        # 找出目前出現的區
+        found = {z for z in priority_zones if z in text}
+
         if last_hash is None:
             last_hash = current_hash
-            last_found = found_infield
+            last_found = found
             print("初始化完成")
             time.sleep(CHECK_INTERVAL)
             continue
 
-        # 條件：內野出現 + 頁面有更新
-        if found_infield and (current_hash != last_hash or not last_found):
-            print("🎫 內野釋票偵測到！")
+        # 🔥 只抓「新出現的區」
+        new_found = found - last_found
 
-            send_telegram(f"""🎫 內野釋票！
+        if current_hash != last_hash and new_found:
+            # 按優先順序排序
+            ordered = [z for z in priority_zones if z in new_found]
 
-🔗 {URL}
-""")
+            msg = "🎫 富邦悍將釋票（PRO監控）\n\n"
+            msg += "🔥 新釋出熱門區：\n"
+            msg += "\n".join(ordered)
+            msg += f"\n\n🔗 {URL}"
 
-            last_hash = current_hash
-            last_found = True
+            send(msg)
 
-        # 如果內野消失，狀態重置
-        if not found_infield:
-            last_found = False
+            print("通知:", ordered)
+
+        last_hash = current_hash
+        last_found = found
 
     except Exception as e:
         print("錯誤:", e)
