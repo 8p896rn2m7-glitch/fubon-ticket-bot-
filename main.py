@@ -35,7 +35,7 @@ targets = [
 
 
 state = {
-    t["url"]: {"found": set(), "fail": 0}
+    t["url"]: {"found": set(), "fail": 0, "cooldown": 0}
     for t in targets
 }
 
@@ -53,8 +53,15 @@ def send(msg):
 
 def fetch(url):
     headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(url, headers=headers, timeout=10)
-    return r.text
+
+    for _ in range(2):  # 🔥 retry
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            return r.text
+        except:
+            time.sleep(1)
+
+    return ""
 
 
 while True:
@@ -66,11 +73,18 @@ while True:
         try:
             text = fetch(url)
 
-            found = {z for z in zones if z in text}
+            if not text:
+                continue
 
+            found = {z for z in zones if z in text}
             prev = state[url]["found"]
 
             added = found - prev
+
+            # 🔥 冷卻機制（避免重複洗訊息）
+            if state[url]["cooldown"] > 0:
+                state[url]["cooldown"] -= 1
+                continue
 
             if added:
                 msg = f"🎫 釋票通知｜{name}\n\n"
@@ -81,6 +95,9 @@ while True:
                 send(msg)
 
                 print(name, ":", added)
+
+                # 🔥 設定冷卻（避免連續重複通知）
+                state[url]["cooldown"] = 3
 
             state[url]["found"] = found
             state[url]["fail"] = 0
