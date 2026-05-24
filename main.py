@@ -1,8 +1,7 @@
 import requests
 import time
 
-BOT_TOKEN = "8910259457: :AAHpwewaaZUEwxw8uGF
-8E0A2VKaev2UPxu0"
+BOT_TOKEN = "8910259457:AAHpwewaaZUEwxw8uGF8E0A2VKaev2UPxu0"
 CHAT_ID = "8699744629"
 
 URL = "https://guardians.fami.life/UTK0204_"
